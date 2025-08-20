@@ -241,6 +241,93 @@ export class FlightService {
     }
   }
 
+
+  // Add this method to your existing FlightService class
+
+  /**
+   * Enhanced version of getFlightVersionsByDate with better timeout and retry logic
+   */
+  async getFlightVersionsByDateWithRetry(queryDto: FlightVersionQueryDto, retries: number = 2): Promise<FlightVersionResponse[]> {
+    for (let attempt = 1; attempt <= retries + 1; attempt++) {
+      try {
+        // Validate date parameter
+        if (!queryDto.date?.trim()) {
+          throw new HttpException(
+            'Date parameter is required',
+            HttpStatus.BAD_REQUEST
+          );
+        }
+
+        const url = this.buildFlightVersionUrl(queryDto.date.trim());
+        this.logger.log(`Attempt ${attempt}: Fetching flight versions from: ${url}`);
+
+        // Increased timeout and better configuration
+        const response = await firstValueFrom(
+          this.httpService.get<FlightVersionApiResponse>(url, {
+            timeout: 30000, // Increased to 30 seconds
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Connection': 'keep-alive',
+              'Accept-Encoding': 'gzip, deflate'
+            },
+            maxRedirects: 5,
+            validateStatus: function (status) {
+              return status >= 200 && status < 300; // Only accept 2xx responses
+            }
+          })
+        );
+
+        this.logger.log(`Flight version API response received with status: ${response.status} on attempt ${attempt}`);
+
+        // Extract and process the data
+        const result = this.extractFlightVersionFields(response.data);
+        this.logger.log(`Successfully processed ${result.length} flight records`);
+
+        return result;
+
+      } catch (error) {
+        this.logger.error(`Attempt ${attempt} failed:`, error.message);
+
+        // If this is the last attempt, throw the error
+        if (attempt === retries + 1) {
+          if (error.response) {
+            this.logger.error('Final API Response Status:', error.response.status);
+            this.logger.error('Final API Response Data:', JSON.stringify(error.response.data, null, 2));
+
+            throw new HttpException(
+              `External API error after ${retries + 1} attempts: ${error.response.status} - ${error.response.statusText}`,
+              HttpStatus.BAD_GATEWAY
+            );
+          } else if (error.code === 'ECONNABORTED') {
+            throw new HttpException(
+              `Request timeout after ${retries + 1} attempts - External API did not respond in time`,
+              HttpStatus.GATEWAY_TIMEOUT
+            );
+          } else if (error.code === 'ECONNRESET' || error.code === 'ENOTFOUND') {
+            throw new HttpException(
+              `Connection error after ${retries + 1} attempts - Unable to reach external API`,
+              HttpStatus.BAD_GATEWAY
+            );
+          } else {
+            throw new HttpException(
+              error.message || `Failed to fetch flight version data after ${retries + 1} attempts`,
+              error.status || HttpStatus.INTERNAL_SERVER_ERROR
+            );
+          }
+        }
+
+        // Wait before retry (exponential backoff)
+        if (attempt < retries + 1) {
+          const waitTime = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s...
+          this.logger.log(`Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+    }
+}
+
   /**
    * Extract only the specific fields requested for flight versions
    */
