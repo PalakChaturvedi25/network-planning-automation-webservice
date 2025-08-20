@@ -6,6 +6,8 @@ import { TestModule } from './test-module/test.module';
 import { DatabaseModule } from './db/database.module';
 import { GlobalExceptionFilter } from './common/global-exception.filter';
 import { LoggingInterceptor } from './common/global-api-request.logger';
+import { HttpModule } from '@nestjs/axios';
+import { FlightModule } from './flight/flight.module' ;
 
 /**
  * AppModule Configuration
@@ -31,7 +33,7 @@ import { LoggingInterceptor } from './common/global-api-request.logger';
  *
  */
 @Module({
-  imports: [AppConfigModule, TestModule, DatabaseModule],
+  imports: [AppConfigModule, HttpModule , FlightModule],
   controllers: [AppController],
   providers: [
     AppService,

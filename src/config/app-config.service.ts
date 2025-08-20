@@ -6,26 +6,26 @@ export class AppConfigService {
   constructor(private readonly configService: ConfigService) {}
 
   get port(): number {
-    return this.configService.get<number>('PORT');
+    return this.configService.get<number>('3000');
   }
 
   get getDatabaseUrl(): string {
-    return this.configService.get<string>('MYSQL_DATABASE_HOST');
+    return this.configService.get<string>('uat-esb-db.cfwwkweqog18.ap-south-1.rds.amazonaws.com');
   }
 
   get getDatabaseUsername(): string {
-    return this.configService.get<string>('MYSQL_DATABASE_USERNAME');
+    return this.configService.get<string>('appuser-data-transfer-service');
   }
 
   get getDatabasePassword(): string {
-    return this.configService.get<string>('MYSQL_DATABASE_PASSWORD');
+    return this.configService.get<string>('Dtfrtsvric37282sfn99qqt');
   }
 
   get getDatabaseName(): string {
-    return this.configService.get<string>('MYSQL_DATABASE_NAME');
+    return this.configService.get<string>('QP_DL_CM_PROD');
   }
 
   get getDatabasePort(): number {
-    return this.configService.get<number>('MYSQL_DATABASE_PORT');
+    return this.configService.get<number>('3306');
   }
 }
