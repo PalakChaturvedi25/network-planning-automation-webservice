@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { UserPermissions, AuthService } from '../auth/auth.service';
 import { FlightQueryDto } from './dto/flight-query.dto';
 import { FlightVersionQueryDto } from './dto/flight-version-query.dto';
 import {
@@ -11,14 +12,16 @@ import {
   FlightVersionFullData
 } from './interfaces/flight.interface';
 
+
 @Injectable()
 export class FlightService {
   private readonly logger = new Logger(FlightService.name);
   private readonly baseUrl = 'https://uat-int.qp.akasaair.com/api/qp-vision-webservice/api/v1/sm';
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(private readonly httpService: HttpService,
+      private readonly authService: AuthService ) {}
 
-  async getFlightVersions(queryDto: FlightQueryDto): Promise<ProcessedFlightData[]> {
+  async getFlightVersions(queryDto: FlightQueryDto, userPermissions?: UserPermissions): Promise<ProcessedFlightData[]> {
     try {
       // Clean and validate parameters
       const cleanedQuery = {
@@ -53,8 +56,14 @@ export class FlightService {
       // Log successful response
       this.logger.log(`API Response received with status: ${response.status}`);
 
-      // Extract and process the data
-      return this.extractSelectedFields(response.data);
+      let result = this.extractSelectedFields(response.data);
+
+          // Apply location-based filtering if user has restricted access
+          if (userPermissions && !await this.authService.canViewAllLocations(userPermissions)) {
+            result = this.filterByUserLocations(result, userPermissions);
+          }
+
+          return result;
 
     } catch (error) {
       this.logger.error('Error fetching flight data:', error.message);
@@ -83,7 +92,7 @@ export class FlightService {
     }
   }
 
-  async getFlightVersionsByDate(queryDto: FlightVersionQueryDto): Promise<FlightVersionResponse[]> {
+  async getFlightVersionsByDate(queryDto: FlightVersionQueryDto, userPermissions?: UserPermissions): Promise<FlightVersionResponse[]> {
     try {
       // Validate date parameter
       if (!queryDto.date?.trim()) {
@@ -111,8 +120,14 @@ export class FlightService {
       this.logger.log(`Flight version API response received with status: ${response.status}`);
 
       // Extract and process the data
-      return this.extractFlightVersionFields(response.data);
+         let result = this.extractFlightVersionFields(response.data);
 
+         // Apply location-based filtering if user has restricted access
+         if (userPermissions && !await this.authService.canViewAllLocations(userPermissions)) {
+           result = this.filterFlightVersionsByUserLocations(result, userPermissions);
+         }
+
+         return result;
     } catch (error) {
       this.logger.error('Error fetching flight version data:', error.message);
 
@@ -166,9 +181,8 @@ export class FlightService {
     return finalUrl;
   }
 
-  /**
-   * Build URL for flight version API
-   */
+
+
   private buildFlightVersionUrl(date: string): string {
     const url = `${this.baseUrl}/flights/version?date=${encodeURIComponent(date)}`;
     this.logger.log(`Built flight version URL: ${url}`);
@@ -242,11 +256,7 @@ export class FlightService {
   }
 
 
-  // Add this method to your existing FlightService class
 
-  /**
-   * Enhanced version of getFlightVersionsByDate with better timeout and retry logic
-   */
   async getFlightVersionsByDateWithRetry(queryDto: FlightVersionQueryDto, retries: number = 2): Promise<FlightVersionResponse[]> {
     for (let attempt = 1; attempt <= retries + 1; attempt++) {
       try {
@@ -328,9 +338,48 @@ export class FlightService {
     }
 }
 
-  /**
-   * Extract only the specific fields requested for flight versions
-   */
+
+
+
+// Add these private methods for filtering:
+private filterByUserLocations(flights: ProcessedFlightData[], userPermissions: UserPermissions): ProcessedFlightData[] {
+  if (!userPermissions.allowedLocations) {
+    return flights;
+  }
+
+  return flights.filter(flight => {
+    const isDepartureAllowed = !userPermissions.allowedLocations.departureStations?.length ||
+                              userPermissions.allowedLocations.departureStations.includes(flight.departureStation);
+
+    const isArrivalAllowed = !userPermissions.allowedLocations.arrivalStations?.length ||
+                            userPermissions.allowedLocations.arrivalStations.includes(flight.arrivalStation);
+
+    return isDepartureAllowed && isArrivalAllowed;
+  });
+}
+
+private filterFlightVersionsByUserLocations(flights: FlightVersionResponse[], userPermissions: UserPermissions): FlightVersionResponse[] {
+  if (!userPermissions.allowedLocations) {
+    return flights;
+  }
+
+  return flights.filter(flight => {
+    const isDepartureAllowed = !userPermissions.allowedLocations.departureStations?.length ||
+                              userPermissions.allowedLocations.departureStations.includes(flight.departureStation);
+
+    const isArrivalAllowed = !userPermissions.allowedLocations.arrivalStations?.length ||
+                            userPermissions.allowedLocations.arrivalStations.includes(flight.arrivalStation);
+
+    return isDepartureAllowed && isArrivalAllowed;
+  });
+}
+
+
+
+
+
+
+
   private extractFlightVersionFields(apiResponse: FlightVersionApiResponse): FlightVersionResponse[] {
     try {
       this.logger.log('=== FLIGHT VERSION RAW API RESPONSE ===');

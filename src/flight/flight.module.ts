@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { FlightController } from './flight.controller';
 import { FlightService } from './flight.service';
+import { AuthService } from '../auth/auth.service';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Module({
   imports: [
@@ -11,6 +13,9 @@ import { FlightService } from './flight.service';
     }),
   ],
   controllers: [FlightController],
-  providers: [FlightService],
+  providers: [FlightService,
+       AuthService,
+       RolesGuard
+       ],
 })
 export class FlightModule {}

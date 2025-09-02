@@ -6,25 +6,32 @@ import {
   HttpStatus,
   Logger,
   StreamableFile,
-  Header
+  Header,
+  UseGuards,
+  Request
 } from '@nestjs/common';
 import * as XLSX from 'xlsx';
 import { FlightService } from './flight.service';
 import { FlightQueryDto } from './dto/flight-query.dto';
 import { FlightVersionQueryDto } from './dto/flight-version-query.dto';
+import { RolesGuard } from '../auth/guards/roles.guard';  // Add this import
+import { Roles } from '../auth/decorators/roles.decorator';  // Add this import
+
 
 @Controller('api/flights')
+@UseGuards(RolesGuard)
 export class FlightController {
   private readonly logger = new Logger(FlightController.name);
 
   constructor(private readonly flightService: FlightService) {}
 
   @Get('versions')
-  async getFlightVersions(@Query() queryDto: FlightQueryDto) {
+  @Roles('flight_viewer', 'flight_admin', 'admin')
+  async getFlightVersions(@Query() queryDto: FlightQueryDto ,  @Request() request) {
     try {
       this.logger.log(`Received request with params: ${JSON.stringify(queryDto)}`);
 
-      const result = await this.flightService.getFlightVersions(queryDto);
+        const result = await this.flightService.getFlightVersions(queryDto, request.userPermissions);
 
       return {
         success: true,
@@ -39,11 +46,12 @@ export class FlightController {
   }
 
   @Get('versions/by-date')
-  async getFlightVersionsByDate(@Query() queryDto: FlightVersionQueryDto) {
+  @Roles('flight_viewer', 'flight_admin', 'admin')
+  async getFlightVersionsByDate(@Query() queryDto: FlightVersionQueryDto , @Request() request) {
     try {
       this.logger.log(`Received flight version request with date: ${queryDto.date}`);
 
-      const result = await this.flightService.getFlightVersionsByDate(queryDto);
+      const result = await this.flightService.getFlightVersionsByDate(queryDto, request.userPermissions);
 
       return {
         success: true,
@@ -57,5 +65,30 @@ export class FlightController {
       throw error;
     }
   }
+
+
+
+@Get('auth/generate-token')
+async generateTestToken(@Query('role') role: string = 'flight_viewer') {
+  const jwt = require('jsonwebtoken');
+
+  const payload = {
+    userId: 'test-user',
+    username: 'test',
+    roles: [role],
+    exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // 24 hours
+  };
+
+  const token = jwt.sign(payload, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0LXVzZXIiLCJ1c2VybmFtZSI6InRlc3QiLCJyb2xlcyI6WyJmbGlnaHRfdmlld2VyIl0sImV4cCI6MTc1NjgwOTcxOCwiaWF0IjoxNzU2NzIzMzE4fQ.iCtToYJ0xR0cIp04O-81vmGPtk26tL98HtcLn9Zv2iI');
+
+  return {
+    token,
+    payload,
+    usage: `Use this token in Authorization header: Bearer ${token}`
+  };
+}
+
+
+
 
 }
