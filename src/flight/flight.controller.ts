@@ -79,7 +79,7 @@ async generateTestToken(@Query('role') role: string = 'flight_viewer') {
     exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // 24 hours
   };
 
-  const token = jwt.sign(payload, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0LXVzZXIiLCJ1c2VybmFtZSI6InRlc3QiLCJyb2xlcyI6WyJmbGlnaHRfdmlld2VyIl0sImV4cCI6MTc1NjgwOTcxOCwiaWF0IjoxNzU2NzIzMzE4fQ.iCtToYJ0xR0cIp04O-81vmGPtk26tL98HtcLn9Zv2iI');
+  const token = jwt.sign(payload, 'secret');
 
   return {
     token,

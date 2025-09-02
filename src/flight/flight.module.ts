@@ -4,6 +4,7 @@ import { FlightController } from './flight.controller';
 import { FlightService } from './flight.service';
 import { AuthService } from '../auth/auth.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [

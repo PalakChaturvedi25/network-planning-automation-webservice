@@ -117,7 +117,7 @@ export class AuthService {
       const token = authHeader.replace('Bearer ', '');
 //       this.logger.log('Extracted token:', token);
       const jwt = require('jsonwebtoken');
-      const decoded = jwt.verify(token, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0LXVzZXIiLCJ1c2VybmFtZSI6InRlc3QiLCJyb2xlcyI6WyJmbGlnaHRfdmlld2VyIl0sImV4cCI6MTc1NjgwOTcxOCwiaWF0IjoxNzU2NzIzMzE4fQ.iCtToYJ0xR0cIp04O-81vmGPtk26tL98HtcLn9Zv2iI');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
       // Mock different user types based on roles
       if (decoded.roles.includes('admin')) {
