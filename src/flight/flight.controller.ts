@@ -14,19 +14,19 @@ import * as XLSX from 'xlsx';
 import { FlightService } from './flight.service';
 import { FlightQueryDto } from './dto/flight-query.dto';
 import { FlightVersionQueryDto } from './dto/flight-version-query.dto';
-import { RolesGuard } from '../auth/guards/roles.guard';  // Add this import
-import { Roles } from '../auth/decorators/roles.decorator';  // Add this import
+import { DynamicRolesGuard } from '../auth/guards/roles.guard';
+// import { Roles } from '../auth/decorators/roles.decorator';  // Add this import
 
 
 @Controller('api/flights')
-@UseGuards(RolesGuard)
+// @UseGuards(DynamicRolesGuard)
 export class FlightController {
   private readonly logger = new Logger(FlightController.name);
 
   constructor(private readonly flightService: FlightService) {}
 
   @Get('versions')
-  @Roles('flight_viewer', 'flight_admin', 'admin')
+  @UseGuards(DynamicRolesGuard)
   async getFlightVersions(@Query() queryDto: FlightQueryDto ,  @Request() request) {
     try {
       this.logger.log(`Received request with params: ${JSON.stringify(queryDto)}`);
@@ -46,7 +46,7 @@ export class FlightController {
   }
 
   @Get('versions/by-date')
-  @Roles('flight_viewer', 'flight_admin', 'admin')
+  @UseGuards(DynamicRolesGuard)
   async getFlightVersionsByDate(@Query() queryDto: FlightVersionQueryDto , @Request() request) {
     try {
       this.logger.log(`Received flight version request with date: ${queryDto.date}`);
@@ -69,12 +69,13 @@ export class FlightController {
 
 
 @Get('auth/generate-token')
-async generateTestToken(@Query('role') role: string = 'flight_viewer') {
+async generateTestToken( @Query('role') role: string = 'flight_viewer',
+                          @Query('userId') userId: string = 'test-user') {
   const jwt = require('jsonwebtoken');
 
   const payload = {
-    userId: 'test-user',
-    username: 'test',
+    userId,
+    username: userId === 'admin-user' ? 'admin' : 'test',
     roles: [role],
     exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // 24 hours
   };

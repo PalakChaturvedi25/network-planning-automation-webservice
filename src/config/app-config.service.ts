@@ -10,19 +10,19 @@ export class AppConfigService {
   }
 
   get getDatabaseUrl(): string {
-    return this.configService.get<string>('uat-esb-db.cfwwkweqog18.ap-south-1.rds.amazonaws.com');
+    return this.configService.get<string>('172.24.87.43');
   }
 
   get getDatabaseUsername(): string {
-    return this.configService.get<string>('appuser-data-transfer-service');
+    return this.configService.get<string>('appuser-network-planning');
   }
 
   get getDatabasePassword(): string {
-    return this.configService.get<string>('Dtfrtsvric37282sfn99qqt');
+    return this.configService.get<string>('YmmhKi7dnY#1345icnh');
   }
 
   get getDatabaseName(): string {
-    return this.configService.get<string>('QP_DL_CM_PROD');
+    return this.configService.get<string>('QP_NETWORK_PLANNING');
   }
 
   get getDatabasePort(): number {

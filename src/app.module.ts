@@ -7,7 +7,9 @@ import { DatabaseModule } from './db/database.module';
 import { GlobalExceptionFilter } from './common/global-exception.filter';
 import { LoggingInterceptor } from './common/global-api-request.logger';
 import { HttpModule } from '@nestjs/axios';
-import { FlightModule } from './flight/flight.module' ;
+import { FlightModule } from './flight/flight.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { RoleManagement } from './auth/entities/role-management.entity';
 
 /**
  * AppModule Configuration
@@ -33,7 +35,34 @@ import { FlightModule } from './flight/flight.module' ;
  *
  */
 @Module({
-  imports: [AppConfigModule, HttpModule , FlightModule],
+  imports: [
+    AppConfigModule,
+    HttpModule,
+    FlightModule,
+    TypeOrmModule.forRoot({
+      type: 'mysql',
+      //       host: process.env.DB_HOST,
+      //       port: parseInt(process.env.DB_PORT, 3306 ),
+      //       username: process.env.DB_USERNAME,
+      //       password: process.env.DB_PASSWORD,
+      //       database: process.env.DB_NAME,
+      host: '172.24.87.43',
+      port: 3306,
+      username: 'appuser-network-planning',
+      password: 'YmmhKi7dnY#1345icnh',
+      database: 'QP_NETWORK_PLANNING',
+      entities: [__dirname + '/**/*.entity.{js,ts}'],
+      synchronize: false,    // set true only for development
+       extra: {
+                authPlugin: 'mysql_native_password',
+                // Additional connection options for better stability
+                acquireTimeout: 60000,
+                timeout: 60000,
+                // Connection pool settings
+                connectionLimit: 10,
+              },
+    }),
+  ],
   controllers: [AppController],
   providers: [
     AppService,

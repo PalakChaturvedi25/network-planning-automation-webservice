@@ -3,8 +3,10 @@ import { HttpModule } from '@nestjs/axios';
 import { FlightController } from './flight.controller';
 import { FlightService } from './flight.service';
 import { AuthService } from '../auth/auth.service';
-import { RolesGuard } from '../auth/guards/roles.guard';
+// import { RolesGuard } from '../auth/guards/roles.guard';
 import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm'; // <-- Add this import
+import { RoleManagement } from '../auth/entities/role-management.entity';
 
 @Module({
   imports: [
@@ -12,11 +14,9 @@ import { ConfigModule } from '@nestjs/config';
       timeout: 10000,
       maxRedirects: 5,
     }),
+    TypeOrmModule.forFeature([RoleManagement]), // <-- Add this line
   ],
   controllers: [FlightController],
-  providers: [FlightService,
-       AuthService,
-       RolesGuard
-       ],
+  providers: [FlightService, AuthService ],
 })
 export class FlightModule {}
