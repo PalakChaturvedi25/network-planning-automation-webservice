@@ -40,17 +40,17 @@ export interface FlightApiResponse {
 }
 
 export interface ProcessedFlightData {
-  revisedFileName: string;
-  flightNumber: string;
-  departureStation: string;
-  arrivalStation: string;
-  std: string;
-  sta: string;
-  departureTerminal: string;
-  arrivalTerminal: string;
-  aircraftEquipment: string;
-  aircraftConfiguration: string;
-  codeShareDuplicateLeg: string;
+  revisedFileName: string[];
+  flightNumber: string[];
+  departureStation: string[];
+  arrivalStation: string[];
+  std: string[];
+  sta: string[];
+  departureTerminal: string[];
+  arrivalTerminal: string[];
+  aircraftEquipment: string[];
+  aircraftConfiguration: string[];
+  codeShareDuplicateLeg: string[];
 }
 
 export interface VersionInfo {
@@ -98,14 +98,14 @@ export interface FlightVersionFullData {
 export interface FlightVersionResponse {
     revisedFileName: string;
     flightNumber: string;
-    departureStation: string;
-    arrivalStation: string;
-    std: string;
-    sta: string;
-    departureTerminal: string;
-    arrivalTerminal: string;
-    aircraftEquipment: string;
-    aircraftConfiguration: string;
-    codeShareDuplicateLeg: string;
-    date: string;
+    departureStation: string | string[];
+      arrivalStation: string | string[];
+      std: string;
+      sta: string;
+      departureTerminal: string;
+      arrivalTerminal: string;
+      aircraftEquipment: string;
+      aircraftConfiguration: string;
+      codeShareDuplicateLeg: string;
+      date: string;
 }

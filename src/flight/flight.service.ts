@@ -241,183 +241,162 @@ export class FlightService {
     }
 }
 
-  // New method to apply permission-based filters for flight data
-  private async applyPermissionFilters(flights: ProcessedFlightData[], userPermissions: UserPermissions): Promise<ProcessedFlightData[]> {
-    this.logger.log('Applying permission filters to flight data');
+private async applyPermissionFilters(flights: ProcessedFlightData[], userPermissions: UserPermissions): Promise<ProcessedFlightData[]> {
+  this.logger.log('Applying permission filters to flight data');
 
-
-    if (userPermissions.roles.includes('admin')) {
-      this.logger.log('User has admin role - returning all flights');
-      return flights;
-    }
-
-    // Get user's station and date permissions dynamically from database
-    const stationDatePerms = await this.authService.getUserStationAndDatePermissions(userPermissions.roles);
-
-    this.logger.log(`User allowed stations: ${JSON.stringify(stationDatePerms.allowedStations)}`);
-    this.logger.log(`User date ranges: ${JSON.stringify(stationDatePerms.dateRanges)}`);
-
-    let filteredFlights = [...flights];
-
-    // Apply station-based filtering (departure OR arrival station must match)
-    if (stationDatePerms.allowedStations.length > 0) {
-      filteredFlights = filteredFlights.filter(flight => {
-        const isDepartureAllowed = stationDatePerms.allowedStations.includes(flight.departureStation);
-        const isArrivalAllowed = stationDatePerms.allowedStations.includes(flight.arrivalStation);
-
-        const hasStationAccess = isDepartureAllowed || isArrivalAllowed;
-
-        if (!hasStationAccess) {
-          this.logger.log(`Flight ${flight.flightNumber} blocked: stations ${flight.departureStation}-${flight.arrivalStation} not in allowed list`);
-        }
-
-        return hasStationAccess;
-      });
-
-      this.logger.log(`After station filtering: ${filteredFlights.length} flights remaining`);
-    }
-
-//     // Apply date range filtering (flight date must be within any of the user's valid date ranges)
-//     if (stationDatePerms.dateRanges.length > 0) {
-//       filteredFlights = filteredFlights.filter(flight => {
-//         if (!flight.date || flight.date === 'N/A') {
-//           this.logger.log(`Flight ${flight.flightNumber} blocked: no valid date`);
-//           return false;
-//         }
-//
-//         const flightDate = new Date(flight.date);
-//
-//         // Check if flight date falls within any of the user's valid date ranges
-//         const isDateAllowed = stationDatePerms.dateRanges.some(range => {
-//           const startDate = new Date(range.start_date);
-//           const endDate = new Date(range.end_date);
-//           const isInRange = flightDate >= startDate && flightDate <= endDate;
-//
-//           if (!isInRange) {
-//             this.logger.log(`Flight ${flight.flightNumber} date ${flight.date} not in range ${range.start_date} to ${range.end_date}`);
-//           }
-//
-//           return isInRange;
-//         });
-//
-//         if (!isDateAllowed) {
-//           this.logger.log(`Flight ${flight.flightNumber} blocked: date ${flight.date} not within any allowed date range`);
-//         }
-//
-//         return isDateAllowed;
-//       });
-//
-//       this.logger.log(`After date filtering: ${filteredFlights.length} flights remaining`);
-//     }
-
-    return filteredFlights;
+  if (userPermissions.roles.includes('admin')) {
+    this.logger.log('User has admin role - returning all flights');
+    return flights;
   }
 
+  const stationDatePerms = await this.authService.getUserStationAndDatePermissions(userPermissions.roles);
 
-  // New method to apply permission-based filters for flight version data
- private async applyFlightVersionPermissionFilters(flights: FlightVersionResponse[], userPermissions: UserPermissions): Promise<FlightVersionResponse[]> {
-   this.logger.log('Applying permission filters to flight version data');
+  this.logger.log(`User allowed stations: ${JSON.stringify(stationDatePerms.allowedStations)}`);
+  this.logger.log(`User date ranges: ${JSON.stringify(stationDatePerms.dateRanges)}`);
 
-   // Check if user has admin role (admin sees everything)
-   if (userPermissions.roles.includes('admin')) {
-     this.logger.log('User has admin role - returning all flight versions');
+  let filteredFlights = [...flights];
+
+  if (stationDatePerms.allowedStations.length > 0) {
+    filteredFlights = filteredFlights.filter(flight => {
+      // Check if any version has allowed stations
+      const hasAllowedStation = flight.departureStation.some((dep, idx) => {
+        const arr = flight.arrivalStation[idx];
+        return stationDatePerms.allowedStations.includes(dep) ||
+               stationDatePerms.allowedStations.includes(arr);
+      });
+
+      if (!hasAllowedStation) {
+        this.logger.log(`Flight ${flight.flightNumber[0]} blocked: no allowed stations found`);
+      }
+
+      return hasAllowedStation;
+    });
+
+    this.logger.log(`After station filtering: ${filteredFlights.length} flights remaining`);
+  }
+
+  return filteredFlights;
+}
+
+private async applyFlightVersionPermissionFilters(flights: FlightVersionResponse[], userPermissions: UserPermissions): Promise<FlightVersionResponse[]> {
+  this.logger.log('Applying permission filters to flight version data');
+
+  if (userPermissions.roles.includes('admin')) {
+    this.logger.log('User has admin role - returning all flight versions');
+    return flights;
+  }
+
+  const stationDatePerms = await this.authService.getUserStationAndDatePermissions(userPermissions.roles);
+
+  this.logger.log(`User allowed stations: ${JSON.stringify(stationDatePerms.allowedStations)}`);
+  this.logger.log(`User date ranges: ${JSON.stringify(stationDatePerms.dateRanges)}`);
+
+  let filteredFlights = [...flights];
+
+  if (stationDatePerms.allowedStations.length > 0) {
+    filteredFlights = filteredFlights.filter(flight => {
+      // Handle both string and array for departure stations
+      const isDepartureAllowed = Array.isArray(flight.departureStation)
+        ? flight.departureStation.some(station => stationDatePerms.allowedStations.includes(station))
+        : stationDatePerms.allowedStations.includes(flight.departureStation);
+
+      // Handle both string and array for arrival stations
+      const isArrivalAllowed = Array.isArray(flight.arrivalStation)
+        ? flight.arrivalStation.some(station => stationDatePerms.allowedStations.includes(station))
+        : stationDatePerms.allowedStations.includes(flight.arrivalStation);
+
+      const hasStationAccess = isDepartureAllowed || isArrivalAllowed;
+
+      if (!hasStationAccess) {
+        const depStation = Array.isArray(flight.departureStation) ? flight.departureStation.join(',') : flight.departureStation;
+        const arrStation = Array.isArray(flight.arrivalStation) ? flight.arrivalStation.join(',') : flight.arrivalStation;
+        this.logger.log(`Flight version ${flight.flightNumber} blocked: stations ${depStation}-${arrStation} not in allowed list`);
+      }
+
+      return hasStationAccess;
+    });
+
+    this.logger.log(`After station filtering: ${filteredFlights.length} flight versions remaining`);
+  }
+
+  if (stationDatePerms.dateRanges.length > 0) {
+    filteredFlights = filteredFlights.filter(flight => {
+      if (!flight.date || flight.date === 'N/A') {
+        this.logger.log(`Flight version ${flight.flightNumber} blocked: no valid date`);
+        return false;
+      }
+
+      const flightDate = new Date(flight.date);
+
+      const isDateAllowed = stationDatePerms.dateRanges.some(range => {
+        const startDate = new Date(range.start_date);
+        const endDate = new Date(range.end_date);
+        const isInRange = flightDate >= startDate && flightDate <= endDate;
+
+        if (!isInRange) {
+          this.logger.log(`Flight version ${flight.flightNumber} date ${flight.date} not in range ${range.start_date} to ${range.end_date}`);
+        }
+
+        return isInRange;
+      });
+
+      if (!isDateAllowed) {
+        this.logger.log(`Flight version ${flight.flightNumber} blocked: date ${flight.date} not within any allowed date range`);
+      }
+
+      return isDateAllowed;
+    });
+
+    this.logger.log(`After date filtering: ${filteredFlights.length} flight versions remaining`);
+  }
+
+  return filteredFlights;
+}
+
+
+//  private filterFlightVersionsByUserLocations(flights: FlightVersionResponse[], userPermissions: UserPermissions): FlightVersionResponse[] {
+//    if (!userPermissions.allowedLocations) {
+//      return flights;
+//    }
+//
+//    return flights.filter(flight => {
+//      const isDepartureAllowed = !userPermissions.allowedLocations.departureStations?.length ||
+//                                userPermissions.allowedLocations.departureStations.includes(flight.departureStation);
+//
+//      const isArrivalAllowed = !userPermissions.allowedLocations.arrivalStations?.length ||
+//                              userPermissions.allowedLocations.arrivalStations.includes(flight.arrivalStation);
+//
+//      return isDepartureAllowed && isArrivalAllowed;
+//    });
+//  }
+
+ private filterFlightVersionsByUserLocations(flights: FlightVersionResponse[], userPermissions: UserPermissions): FlightVersionResponse[] {
+   if (!userPermissions.allowedLocations) {
      return flights;
    }
 
-   // Get user's station and date permissions dynamically from database
-   const stationDatePerms = await this.authService.getUserStationAndDatePermissions(userPermissions.roles);
+   return flights.filter(flight => {
+     // Handle both string and array for departure stations
+     const isDepartureAllowed = !userPermissions.allowedLocations.departureStations?.length ||
+                               (Array.isArray(flight.departureStation)
+                                 ? flight.departureStation.some(depStation =>
+                                     userPermissions.allowedLocations.departureStations.includes(depStation)
+                                   )
+                                 : userPermissions.allowedLocations.departureStations.includes(flight.departureStation as string)
+                               );
 
-   this.logger.log(`User allowed stations: ${JSON.stringify(stationDatePerms.allowedStations)}`);
-   this.logger.log(`User date ranges: ${JSON.stringify(stationDatePerms.dateRanges)}`);
+     // Handle both string and array for arrival stations
+     const isArrivalAllowed = !userPermissions.allowedLocations.arrivalStations?.length ||
+                             (Array.isArray(flight.arrivalStation)
+                               ? flight.arrivalStation.some(arrStation =>
+                                   userPermissions.allowedLocations.arrivalStations.includes(arrStation)
+                                 )
+                               : userPermissions.allowedLocations.arrivalStations.includes(flight.arrivalStation as string)
+                             );
 
-   let filteredFlights = [...flights];
-
-   // Apply station-based filtering (departure OR arrival station must match)
-   if (stationDatePerms.allowedStations.length > 0) {
-     filteredFlights = filteredFlights.filter(flight => {
-       const isDepartureAllowed = stationDatePerms.allowedStations.includes(flight.departureStation);
-       const isArrivalAllowed = stationDatePerms.allowedStations.includes(flight.arrivalStation);
-
-       const hasStationAccess = isDepartureAllowed || isArrivalAllowed;
-
-       if (!hasStationAccess) {
-         this.logger.log(`Flight version ${flight.flightNumber} blocked: stations ${flight.departureStation}-${flight.arrivalStation} not in allowed list`);
-       }
-
-       return hasStationAccess;
-     });
-
-     this.logger.log(`After station filtering: ${filteredFlights.length} flight versions remaining`);
-   }
-
-   // Apply date range filtering
-   if (stationDatePerms.dateRanges.length > 0) {
-     filteredFlights = filteredFlights.filter(flight => {
-       if (!flight.date || flight.date === 'N/A') {
-         this.logger.log(`Flight version ${flight.flightNumber} blocked: no valid date`);
-         return false;
-       }
-
-       const flightDate = new Date(flight.date);
-
-       // Check if flight date falls within any of the user's valid date ranges
-       const isDateAllowed = stationDatePerms.dateRanges.some(range => {
-         const startDate = new Date(range.start_date);
-         const endDate = new Date(range.end_date);
-         const isInRange = flightDate >= startDate && flightDate <= endDate;
-
-         if (!isInRange) {
-           this.logger.log(`Flight version ${flight.flightNumber} date ${flight.date} not in range ${range.start_date} to ${range.end_date}`);
-         }
-
-         return isInRange;
-       });
-
-       if (!isDateAllowed) {
-         this.logger.log(`Flight version ${flight.flightNumber} blocked: date ${flight.date} not within any allowed date range`);
-       }
-
-       return isDateAllowed;
-     });
-
-     this.logger.log(`After date filtering: ${filteredFlights.length} flight versions remaining`);
-   }
-
-   return filteredFlights;
+     return isDepartureAllowed && isArrivalAllowed;
+   });
  }
-
-  // Add these private methods for filtering:
-  private filterByUserLocations(flights: ProcessedFlightData[], userPermissions: UserPermissions): ProcessedFlightData[] {
-    if (!userPermissions.allowedLocations) {
-      return flights;
-    }
-
-    return flights.filter(flight => {
-      const isDepartureAllowed = !userPermissions.allowedLocations.departureStations?.length ||
-                                userPermissions.allowedLocations.departureStations.includes(flight.departureStation);
-
-      const isArrivalAllowed = !userPermissions.allowedLocations.arrivalStations?.length ||
-                              userPermissions.allowedLocations.arrivalStations.includes(flight.arrivalStation);
-
-      return isDepartureAllowed && isArrivalAllowed;
-    });
-  }
-
-  private filterFlightVersionsByUserLocations(flights: FlightVersionResponse[], userPermissions: UserPermissions): FlightVersionResponse[] {
-    if (!userPermissions.allowedLocations) {
-      return flights;
-    }
-
-    return flights.filter(flight => {
-      const isDepartureAllowed = !userPermissions.allowedLocations.departureStations?.length ||
-                                userPermissions.allowedLocations.departureStations.includes(flight.departureStation);
-
-      const isArrivalAllowed = !userPermissions.allowedLocations.arrivalStations?.length ||
-                              userPermissions.allowedLocations.arrivalStations.includes(flight.arrivalStation);
-
-      return isDepartureAllowed && isArrivalAllowed;
-    });
-  }
 
   private buildApiUrl(queryDto: FlightQueryDto): string {
     const baseUrl = `${this.baseUrl}/flight/versions`;
@@ -532,8 +511,11 @@ export class FlightService {
 
       const versionInfoList = await this.getVersionInfo();
 
-      // The API response has data under "content" property
-      let dataArray: any[] = [];
+      const sortedVersions = versionInfoList
+            .slice()
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+          let dataArray: any[] = [];
 
       // Handle the specific API response structure
       if (apiResponse.content && Array.isArray(apiResponse.content)) {
@@ -551,56 +533,70 @@ export class FlightService {
         this.logger.log('Response is single object, wrapped in array');
       }
 
-      this.logger.log('=== DATA ARRAY TO PROCESS ===');
-      this.logger.log(`Processing ${dataArray.length} items`);
+        this.logger.log(`Processing ${dataArray.length} items`);
 
-      // Extract only the required fields using actual field names from the API
-      return dataArray.map((item, index) => {
-        this.logger.log(`=== PROCESSING ITEM ${index} ===`);
+         // Group items by flight identifier (flightNumber + departureStation + arrivalStation + date)
+         const flightGroups = new Map<string, any[]>();
 
+         dataArray.forEach(item => {
+           const key = `${item.flightNumber}-${item.departureStation}-${item.arrivalStation}-${item.date}`;
+           if (!flightGroups.has(key)) {
+             flightGroups.set(key, []);
+           }
+           flightGroups.get(key)!.push(item);
+         });
 
-        const originalDate = item.date || 'N/A';
-        const revisedFileName = this.getRevisedFileNameFromDate(originalDate, versionInfoList);
+         return Array.from(flightGroups.values()).map((items, index) => {
+           this.logger.log(`=== PROCESSING FLIGHT GROUP ${index} ===`);
 
+           // Sort items by their corresponding version createdAt
+           const sortedItems = items.sort((a, b) => {
+             const aVersion = this.getRevisedFileNameFromDate(a.date || 'N/A', versionInfoList);
+             const bVersion = this.getRevisedFileNameFromDate(b.date || 'N/A', versionInfoList);
 
-        // Map to actual field names from the API response
-        const processedItem: ProcessedFlightData = {
-          // Using actual field names from your API response:
-          revisedFileName: revisedFileName,
-          flightNumber: item.flightNumber || 'N/A',           // Flight number
-          departureStation: item.departureStation || 'N/A',       // Departure station (CCU)
-          arrivalStation: item.arrivalStation || 'N/A',         // Arrival station (BLR)
-          std: item.std || 'N/A',// Scheduled departure time
-          sta: item.sta || 'N/A',  // Scheduled arrival time
-          departureTerminal: item.departureTerminal || 'N/A',
-          arrivalTerminal: item.arrivalTerminal || 'N/A',
-          // You can also include other useful fields by updating the interface:
-          aircraftEquipment: item.aircraftEquipment || 'N/A',
-          aircraftConfiguration: item.aircraftConfiguration || 'N/A',
-          codeShareDuplicateLeg: item.codeShareDuplicateLeg || 'N/A'
-        };
+             const aVersionInfo = sortedVersions.find(v => v.revisedFileName === aVersion);
+             const bVersionInfo = sortedVersions.find(v => v.revisedFileName === bVersion);
 
-        this.logger.log('=== PROCESSED ITEM ===');
-        this.logger.log(JSON.stringify(processedItem, null, 2));
+             const aDate = aVersionInfo ? new Date(aVersionInfo.createdAt) : new Date(0);
+             const bDate = bVersionInfo ? new Date(bVersionInfo.createdAt) : new Date(0);
 
-        return processedItem;
-      });
+             return bDate.getTime() - aDate.getTime(); // Newest first
+           });
 
-    } catch (error) {
-      this.logger.error('Error processing API response:', error);
-      this.logger.error('Raw response that caused error:', JSON.stringify(apiResponse, null, 2));
-      throw new HttpException(
-        'Error processing data from external API',
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
+           const processedItem: ProcessedFlightData = {
+             revisedFileName: sortedItems.map(item => this.getRevisedFileNameFromDate(item.date || 'N/A', versionInfoList)),
+             flightNumber: sortedItems.map(item => item.flightNumber || 'N/A'),
+             departureStation: sortedItems.map(item => item.departureStation || 'N/A'),
+             arrivalStation: sortedItems.map(item => item.arrivalStation || 'N/A'),
+             std: sortedItems.map(item => item.std || 'N/A'),
+             sta: sortedItems.map(item => item.sta || 'N/A'),
+             departureTerminal: sortedItems.map(item => item.departureTerminal || 'N/A'),
+             arrivalTerminal: sortedItems.map(item => item.arrivalTerminal || 'N/A'),
+             aircraftEquipment: sortedItems.map(item => item.aircraftEquipment || 'N/A'),
+             aircraftConfiguration: sortedItems.map(item => item.aircraftConfiguration || 'N/A'),
+             codeShareDuplicateLeg: sortedItems.map(item => item.codeShareDuplicateLeg || 'N/A')
+           };
+
+           this.logger.log('=== PROCESSED ITEM ===');
+           this.logger.log(JSON.stringify(processedItem, null, 2));
+
+           return processedItem;
+         });
+
+       } catch (error) {
+         this.logger.error('Error processing API response:', error);
+         this.logger.error('Raw response that caused error:', JSON.stringify(apiResponse, null, 2));
+         throw new HttpException(
+           'Error processing data from external API',
+           HttpStatus.INTERNAL_SERVER_ERROR
+         );
+       }
+     }
 
   private async extractFlightVersionFields(apiResponse: FlightVersionApiResponse): Promise<FlightVersionResponse[]> {
     try {
       this.logger.log('=== FLIGHT VERSION RAW API RESPONSE ===');
       this.logger.log(JSON.stringify(apiResponse, null, 2));
-
 
       const versionInfoList = await this.getVersionInfo();
 
@@ -621,23 +617,21 @@ export class FlightService {
       return dataArray.map((item, index) => {
         this.logger.log(`Processing flight version item ${index + 1}`);
 
-         const originalDate = item.date || 'N/A';
-         const revisedFileName = this.getRevisedFileNameFromDate(originalDate, versionInfoList);
-
+        const originalDate = item.date || 'N/A';
+        const revisedFileName = this.getRevisedFileNameFromDate(originalDate, versionInfoList);
 
         const extractedData: FlightVersionResponse = {
           revisedFileName: revisedFileName,
-          flightNumber: item.flightNumber || 'N/A',           // Flight number
-          departureStation: item.departureStation || 'N/A',       // Departure station (CCU)
-          arrivalStation: item.arrivalStation || 'N/A',         // Arrival station (BLR)
-          std: item.std || 'N/A',// Scheduled departure time
-          sta: item.sta || 'N/A',  // Scheduled arrival time
+          flightNumber: item.flightNumber || 'N/A',
+          departureStation: item.departureStation || 'N/A',
+          arrivalStation: item.arrivalStation || 'N/A',
+          std: item.std || 'N/A',
+          sta: item.sta || 'N/A',
           departureTerminal: item.departureTerminal || 'N/A',
           arrivalTerminal: item.arrivalTerminal || 'N/A',
-          // You can also include other useful fields by updating the interface:
           aircraftEquipment: item.aircraftEquipment || 'N/A',
           aircraftConfiguration: item.aircraftConfiguration || 'N/A',
-          codeShareDuplicateLeg: item.codeShareDuplicateLeg || 'N/A' ,
+          codeShareDuplicateLeg: item.codeShareDuplicateLeg || 'N/A',
           date: item.date || 'N/A'
         };
 
@@ -654,4 +648,4 @@ export class FlightService {
       );
     }
   }
-}
+  }
