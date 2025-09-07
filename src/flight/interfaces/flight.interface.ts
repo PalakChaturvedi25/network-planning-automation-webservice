@@ -30,6 +30,8 @@ export interface FlightVersionData {
   modifiedAt: string | null;
 }
 
+
+
 // Existing interfaces
 export interface FlightApiResponse {
   content?: any[];
@@ -38,7 +40,7 @@ export interface FlightApiResponse {
 }
 
 export interface ProcessedFlightData {
-  date: string;
+  revisedFileName: string;
   flightNumber: string;
   departureStation: string;
   arrivalStation: string;
@@ -49,6 +51,29 @@ export interface ProcessedFlightData {
   aircraftEquipment: string;
   aircraftConfiguration: string;
   codeShareDuplicateLeg: string;
+}
+
+export interface VersionInfo {
+  baseFile: string;
+  revisionVersion: number;
+  createdAt: string;
+  revisedFileName: string;
+  isLatest: boolean;
+  messageHash: string;
+}
+
+export interface VersionInfoApiResponse {
+  content: VersionInfo[];
+  pageable: any;
+  totalPages: number;
+  totalElements: number;
+  last: boolean;
+  size: number;
+  number: number;
+  sort: any;
+  numberOfElements: number;
+  first: boolean;
+  empty: boolean;
 }
 
 export interface FlightVersionApiResponse {
@@ -71,7 +96,7 @@ export interface FlightVersionFullData {
 }
 
 export interface FlightVersionResponse {
-  date: string;
+    revisedFileName: string;
     flightNumber: string;
     departureStation: string;
     arrivalStation: string;
@@ -82,4 +107,5 @@ export interface FlightVersionResponse {
     aircraftEquipment: string;
     aircraftConfiguration: string;
     codeShareDuplicateLeg: string;
+    date: string;
 }

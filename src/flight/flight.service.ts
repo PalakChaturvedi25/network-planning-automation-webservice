@@ -9,7 +9,9 @@ import {
   ProcessedFlightData,
   FlightVersionApiResponse,
   FlightVersionResponse,
-  FlightVersionFullData
+  FlightVersionFullData,
+  VersionInfo,
+  VersionInfoApiResponse
 } from './interfaces/flight.interface';
 
 
@@ -59,7 +61,7 @@ export class FlightService {
       // Log successful response
       this.logger.log(`API Response received with status: ${response.status}`);
 
-       let flights = this.extractSelectedFields(response.data);
+       let flights = await this.extractSelectedFields(response.data);
           if (userPermissions) {
             flights = await this.applyPermissionFilters(flights, userPermissions); // Add await
           }
@@ -120,7 +122,7 @@ export class FlightService {
 
       this.logger.log(`Flight version API response received with status: ${response.status}`);
 
-     let flights = this.extractFlightVersionFields(response.data);
+     let flights = await this.extractFlightVersionFields(response.data);
 
          if (userPermissions) {
 
@@ -188,7 +190,7 @@ export class FlightService {
         this.logger.log(`Flight version API response received with status: ${response.status} on attempt ${attempt}`);
 
         // Extract and process the data
-       let result = this.extractFlightVersionFields(response.data);
+       let result = await this.extractFlightVersionFields(response.data);
 
              if (userPermissions) {
                result = await this.applyFlightVersionPermissionFilters(result, userPermissions); // Add await
@@ -237,13 +239,13 @@ export class FlightService {
         }
       }
     }
-  }
+}
 
   // New method to apply permission-based filters for flight data
   private async applyPermissionFilters(flights: ProcessedFlightData[], userPermissions: UserPermissions): Promise<ProcessedFlightData[]> {
     this.logger.log('Applying permission filters to flight data');
 
-    // Check if user has admin role (admin sees everything)
+
     if (userPermissions.roles.includes('admin')) {
       this.logger.log('User has admin role - returning all flights');
       return flights;
@@ -275,41 +277,42 @@ export class FlightService {
       this.logger.log(`After station filtering: ${filteredFlights.length} flights remaining`);
     }
 
-    // Apply date range filtering (flight date must be within any of the user's valid date ranges)
-    if (stationDatePerms.dateRanges.length > 0) {
-      filteredFlights = filteredFlights.filter(flight => {
-        if (!flight.date || flight.date === 'N/A') {
-          this.logger.log(`Flight ${flight.flightNumber} blocked: no valid date`);
-          return false;
-        }
-
-        const flightDate = new Date(flight.date);
-
-        // Check if flight date falls within any of the user's valid date ranges
-        const isDateAllowed = stationDatePerms.dateRanges.some(range => {
-          const startDate = new Date(range.start_date);
-          const endDate = new Date(range.end_date);
-          const isInRange = flightDate >= startDate && flightDate <= endDate;
-
-          if (!isInRange) {
-            this.logger.log(`Flight ${flight.flightNumber} date ${flight.date} not in range ${range.start_date} to ${range.end_date}`);
-          }
-
-          return isInRange;
-        });
-
-        if (!isDateAllowed) {
-          this.logger.log(`Flight ${flight.flightNumber} blocked: date ${flight.date} not within any allowed date range`);
-        }
-
-        return isDateAllowed;
-      });
-
-      this.logger.log(`After date filtering: ${filteredFlights.length} flights remaining`);
-    }
+//     // Apply date range filtering (flight date must be within any of the user's valid date ranges)
+//     if (stationDatePerms.dateRanges.length > 0) {
+//       filteredFlights = filteredFlights.filter(flight => {
+//         if (!flight.date || flight.date === 'N/A') {
+//           this.logger.log(`Flight ${flight.flightNumber} blocked: no valid date`);
+//           return false;
+//         }
+//
+//         const flightDate = new Date(flight.date);
+//
+//         // Check if flight date falls within any of the user's valid date ranges
+//         const isDateAllowed = stationDatePerms.dateRanges.some(range => {
+//           const startDate = new Date(range.start_date);
+//           const endDate = new Date(range.end_date);
+//           const isInRange = flightDate >= startDate && flightDate <= endDate;
+//
+//           if (!isInRange) {
+//             this.logger.log(`Flight ${flight.flightNumber} date ${flight.date} not in range ${range.start_date} to ${range.end_date}`);
+//           }
+//
+//           return isInRange;
+//         });
+//
+//         if (!isDateAllowed) {
+//           this.logger.log(`Flight ${flight.flightNumber} blocked: date ${flight.date} not within any allowed date range`);
+//         }
+//
+//         return isDateAllowed;
+//       });
+//
+//       this.logger.log(`After date filtering: ${filteredFlights.length} flights remaining`);
+//     }
 
     return filteredFlights;
   }
+
 
   // New method to apply permission-based filters for flight version data
  private async applyFlightVersionPermissionFilters(flights: FlightVersionResponse[], userPermissions: UserPermissions): Promise<FlightVersionResponse[]> {
@@ -450,10 +453,84 @@ export class FlightService {
     return url;
   }
 
-  private extractSelectedFields(apiResponse: FlightApiResponse): ProcessedFlightData[] {
+  private versionInfoCache: { data: VersionInfo[]; timestamp: number } | null = null;
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+
+  async getVersionInfo(): Promise<VersionInfo[]> {
+    try {
+      // Check cache first
+      if (this.versionInfoCache &&
+          (Date.now() - this.versionInfoCache.timestamp) < this.CACHE_DURATION) {
+        this.logger.log('Using cached version info');
+        return this.versionInfoCache.data;
+      }
+
+      const url = `${this.baseUrl}/flights/versions/info`;
+      this.logger.log(`Fetching version info from: ${url}`);
+
+      const response = await firstValueFrom(
+        this.httpService.get<VersionInfoApiResponse>(url, {
+          timeout: 15000,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          }
+        })
+      );
+
+      const versionData = response.data.content || [];
+
+      // Cache the data
+      this.versionInfoCache = {
+        data: versionData,
+        timestamp: Date.now()
+      };
+
+      this.logger.log(`Retrieved ${versionData.length} version info records`);
+      return versionData;
+
+    } catch (error) {
+      this.logger.error('Error fetching version info:', error.message);
+      // Return empty array if version info fails - don't break the main functionality
+      return [];
+    }
+  }
+
+  private getRevisedFileNameFromDate(date: string, versionInfoList: VersionInfo[]): string {
+    if (!date || date === 'N/A' || versionInfoList.length === 0) {
+      // Find the latest version as default
+      const latestVersion = versionInfoList.find(v => v.isLatest);
+      return latestVersion ? latestVersion.revisedFileName : 'N/A';
+    }
+
+    // Convert the flight date to match with version createdAt
+    const flightDate = new Date(date);
+
+    // Find the most appropriate version based on createdAt
+    // Sort by createdAt descending and find the first one that was created before or on the flight date
+    const sortedVersions = versionInfoList
+      .slice()
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    for (const version of sortedVersions) {
+      const versionDate = new Date(version.createdAt);
+      if (versionDate <= flightDate) {
+        return version.revisedFileName;
+      }
+    }
+
+    // If no version found before the flight date, use the latest
+    const latestVersion = versionInfoList.find(v => v.isLatest);
+    return latestVersion ? latestVersion.revisedFileName : 'N/A';
+  }
+
+  private async extractSelectedFields(apiResponse: FlightApiResponse): Promise<ProcessedFlightData[]> {
     try {
       this.logger.log('=== RAW API RESPONSE ===');
       this.logger.log(JSON.stringify(apiResponse, null, 2));
+
+      const versionInfoList = await this.getVersionInfo();
 
       // The API response has data under "content" property
       let dataArray: any[] = [];
@@ -481,10 +558,15 @@ export class FlightService {
       return dataArray.map((item, index) => {
         this.logger.log(`=== PROCESSING ITEM ${index} ===`);
 
+
+        const originalDate = item.date || 'N/A';
+        const revisedFileName = this.getRevisedFileNameFromDate(originalDate, versionInfoList);
+
+
         // Map to actual field names from the API response
         const processedItem: ProcessedFlightData = {
           // Using actual field names from your API response:
-          date: item.date || 'N/A',
+          revisedFileName: revisedFileName,
           flightNumber: item.flightNumber || 'N/A',           // Flight number
           departureStation: item.departureStation || 'N/A',       // Departure station (CCU)
           arrivalStation: item.arrivalStation || 'N/A',         // Arrival station (BLR)
@@ -514,10 +596,13 @@ export class FlightService {
     }
   }
 
-  private extractFlightVersionFields(apiResponse: FlightVersionApiResponse): FlightVersionResponse[] {
+  private async extractFlightVersionFields(apiResponse: FlightVersionApiResponse): Promise<FlightVersionResponse[]> {
     try {
       this.logger.log('=== FLIGHT VERSION RAW API RESPONSE ===');
       this.logger.log(JSON.stringify(apiResponse, null, 2));
+
+
+      const versionInfoList = await this.getVersionInfo();
 
       // Handle the API response structure
       let dataArray: FlightVersionFullData[] = [];
@@ -536,8 +621,12 @@ export class FlightService {
       return dataArray.map((item, index) => {
         this.logger.log(`Processing flight version item ${index + 1}`);
 
+         const originalDate = item.date || 'N/A';
+         const revisedFileName = this.getRevisedFileNameFromDate(originalDate, versionInfoList);
+
+
         const extractedData: FlightVersionResponse = {
-          date: item.date || 'N/A',
+          revisedFileName: revisedFileName,
           flightNumber: item.flightNumber || 'N/A',           // Flight number
           departureStation: item.departureStation || 'N/A',       // Departure station (CCU)
           arrivalStation: item.arrivalStation || 'N/A',         // Arrival station (BLR)
@@ -548,7 +637,8 @@ export class FlightService {
           // You can also include other useful fields by updating the interface:
           aircraftEquipment: item.aircraftEquipment || 'N/A',
           aircraftConfiguration: item.aircraftConfiguration || 'N/A',
-          codeShareDuplicateLeg: item.codeShareDuplicateLeg || 'N/A'
+          codeShareDuplicateLeg: item.codeShareDuplicateLeg || 'N/A' ,
+          date: item.date || 'N/A'
         };
 
         this.logger.log('Extracted flight version data:', JSON.stringify(extractedData, null, 2));
