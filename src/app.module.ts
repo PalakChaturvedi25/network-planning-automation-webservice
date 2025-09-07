@@ -10,6 +10,8 @@ import { HttpModule } from '@nestjs/axios';
 import { FlightModule } from './flight/flight.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RoleManagement } from './auth/entities/role-management.entity';
+import { RolePermissionsModule } from './role-permissions/role-permissions.module';
+
 
 /**
  * AppModule Configuration
@@ -39,6 +41,7 @@ import { RoleManagement } from './auth/entities/role-management.entity';
     AppConfigModule,
     HttpModule,
     FlightModule,
+    RolePermissionsModule,
     TypeOrmModule.forRoot({
       type: 'mysql',
       //       host: process.env.DB_HOST,
