@@ -1,0 +1,54 @@
+# The manifest for the "communication-webservice" service.
+# Read the full specification for the "Load Balanced Web Service" type at:
+#  https://aws.github.io/copilot-cli/docs/manifest/lb-web-service/
+
+# Your service name will be used in naming your resources like log groups, ECS services, etc.
+name: qp-network-planning-automation-webservice
+type: Backend Service
+
+# Distribute traffic to your service.
+http:
+  path: 'api/network-planning'
+  healthcheck: 'api/network-planning/app/health'
+  alias: '${COPILOT_ENVIRONMENT_NAME}.qp.akasaair.com'
+
+network:
+  vpc:
+    placement: private
+
+# Configuration for your containers and service.
+image:
+  # Docker build arguments. For additional overrides: https://aws.github.io/copilot-cli/docs/manifest/lb-web-service/#image-build
+  build: Dockerfile
+  # Port exposed through your container to route traffic to it.
+  port: 8081
+
+cpu: 1024       # Number of CPU units for the task.
+memory: 2048    # Amount of memory in MiB used by the task.
+count: 1       # Number of tasks that should be running in your service.
+exec: true     # Enable running commands in your container.
+
+environments:
+  uat:
+    http:
+      alias: 'uat.qp.akasaair.com'
+    range:
+      min: 1
+      max: 4
+      cpu_percentage: 70
+      memory_percentage: 80
+      requests: 1000
+      spot_from: 3
+
+  prod:
+    http:
+      alias: 'webservices.qp.akasaair.com'
+    cpu: 2048
+    memory: 4096
+    range:
+      min: 1
+      max: 4
+      cpu_percentage: 70
+      memory_percentage: 80
+      requests: 1000
+      spot_from: 3
